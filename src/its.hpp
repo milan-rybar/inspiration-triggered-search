@@ -7,6 +7,8 @@ namespace its {
 
 	/// CORE STRUCTURES FOR ITS ALGORITHM
 
+	const int IMAGE_SIZE = 256;
+
 	struct Window {
 		int Id; // unique id
 		cv::Rect Rect; // area
@@ -19,8 +21,8 @@ namespace its {
 	};
 
 	struct View {
-		const static int size = 256;
-		const static int fullSize = size * size;
+		const int size = IMAGE_SIZE;
+		const int fullSize = IMAGE_SIZE * IMAGE_SIZE;
 
 		double Area; // size of the area = union of all windows
 		std::vector<Window> Windows; // windows
@@ -32,7 +34,6 @@ namespace its {
 			Area = other.Area;
 			Windows = other.Windows;
 			ResetArea();
-			std::cout<<"operator="<<std::endl;
 			return *this;
 		}
 
@@ -146,8 +147,8 @@ namespace its {
 
 	// ITS algorithm
 	struct ITS : public AlgorithmTemplate {
-		const int size = 256; // image size = 256x256px
-		const double fullSize = 256.0 * 256.0;
+		const int size = IMAGE_SIZE; // image size
+		const double fullSize = IMAGE_SIZE * IMAGE_SIZE;
 
 		// stagnation limit for NEAT
 		int StagnationLimit = 10; 

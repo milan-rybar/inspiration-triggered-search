@@ -110,8 +110,6 @@ BOOST_PYTHON_MODULE(its) {
 	// phenotype functions
 
 	class_<ImagePhenotype, bases<PhenotypeFunction>>("ImagePhenotype", init<int>())
-		.def_readwrite("NetworkActivations", &ImagePhenotype::NetworkActivations)
-		.def_readonly("NetworkDepth", &ImagePhenotype::NetworkDepth)
 	;
 
 
@@ -324,6 +322,16 @@ BOOST_PYTHON_MODULE(its) {
 	class_<std::vector<ITSPhase>>("ITSPhaseVector").def(vector_indexing_suite<std::vector<ITSPhase>>());
 	class_<std::vector<std::vector<ITSPhase>>>("ITSPhaseVector2D").def(vector_indexing_suite<std::vector<std::vector<ITSPhase>>>());
 
+
+	// novelty search
+
+	class_<NoveltySearchTemplate, bases<AlgorithmTemplate>>("NoveltySearchTemplate")
+		.def_readwrite("NoveltySearch_K", &NoveltySearchTemplate::NoveltySearch_K)
+		.def_readwrite("NoveltySearch_AddToArchive", &NoveltySearchTemplate::NoveltySearch_AddToArchive)
+	;
+
+	class_<MultiObjectiveNoveltySearchTemplate, bases<NoveltySearchTemplate>>("MultiObjectiveNoveltySearchTemplate")
+	;
 
 	// other
 

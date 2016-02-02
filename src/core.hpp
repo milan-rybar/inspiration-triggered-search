@@ -51,7 +51,7 @@ namespace its {
 
 		// Creates an image representation of the given individual. 
 		// The result is stored in the variable Image.
-		virtual void Create(NEAT::Genome& individual) = 0;
+		virtual void Create(const NEAT::Genome& individual) = 0;
 	};
 	typedef boost::shared_ptr<PhenotypeFunction> PhenotypeFunctionPtr;
 
@@ -366,7 +366,7 @@ namespace its {
 		}
 
 		// Evaluates the given population.
-		void EvaluatePopulation(NEAT::Population& population) {
+		virtual void EvaluatePopulation(NEAT::Population& population) {
 			for(int i = 0; i < BeforePopulationEvaluationActions.size(); ++i) BeforePopulationEvaluationActions[i]->BeforePopulationEvaluation(*this);
 
 			// evaluate all individuals in the population
@@ -478,25 +478,13 @@ namespace its {
 
 	public:
 
-		// Number of neural network activations. Value less or equal to 0 uses depth of the network.
-		int NetworkActivations = -1;
-		// Number of neural network layers of the last processed individual.
-		int NetworkDepth;
-
 		ImagePhenotype(const int size) : maxValue(size - 1), halfMaxValue((size - 1.0) / 2.0), maxDistanceFromCenter((size - 1.0) / std::sqrt(2.0)), input(4) {
 			Image = cv::Mat(size, size, CV_8UC1, cv::Scalar::all(0));
 		}
 
-		virtual void Create(NEAT::Genome& individual) {
+		virtual void Create(const NEAT::Genome& individual) {
 			// create network
 			individual.BuildPhenotype(NeuralNetwork);
-
-			// calculate network depth
-			individual.CalculateDepth();
-			NetworkDepth = individual.GetDepth();
-
-			// number of activations for this network 
-			const int numActivations = (NetworkActivations < 1) ? NetworkDepth : NetworkActivations;
 
 			// bias
 			input[3] = 1.0;
@@ -515,7 +503,7 @@ namespace its {
 					// evaluate the neural network
 					NeuralNetwork.Flush();
 					NeuralNetwork.Input(input);
-					for(int r = 0; r < numActivations; ++r) NeuralNetwork.Activate();
+					NeuralNetwork.ActivateFeedForward();
 
 					// set the resulting value to the image's pixel
 					p[j] = uchar(std::round(TransformOutput(NeuralNetwork.Output()[0])));
@@ -950,6 +938,163 @@ namespace its {
 		}
 	};
 
+
+
+	/// NOVELTY SEARCH
+
+	class NoveltySearchTemplate : public AlgorithmTemplate {
+	protected:
+		std::vector<cv::Mat> archiveImages;
+		std::vector<NEAT::Genome> archiveIndividuals;
+		std::vector<cv::Mat> populationImages;
+
+	public:
+
+		double NoveltySearch_K = 15;
+		double NoveltySearch_AddToArchive = 6;
+
+		NoveltySearchTemplate() {
+			/////////////////////////////////////
+			// Novelty Search parameters       //
+			/////////////////////////////////////
+
+			// the K constant
+			NoveltySearch_K = 15;
+
+			// number of individuals to randomly add to the archive
+			NoveltySearch_AddToArchive = 6;
+		}
+
+		inline double NoveltyDistance(const cv::Mat& a, const cv::Mat& b) const {
+			return cv::norm(a, b, cv::NORM_L2);
+		}
+
+		double ComputeSparseness(const cv::Mat& behaviour) const
+		{
+			std::vector<double> distances;
+
+			// distances from the population
+			for(int i = 0; i < populationImages.size(); ++i) {
+				const double distance = NoveltyDistance(behaviour, populationImages[i]);
+				distances.push_back(distance);
+			}
+
+			// distances from the archive
+			for(int i = 0; i < archiveImages.size(); ++i) {
+				const double distance = NoveltyDistance(behaviour, archiveImages[i]);
+				distances.push_back(distance);
+			}
+
+			// sort the list, smaller first
+			std::sort(distances.begin(), distances.end());
+
+			// compute the sparseness
+			double sparseness = 0;
+			for(int i = 1; i < NoveltySearch_K + 1; ++i) sparseness += distances[i];
+			sparseness /= NoveltySearch_K;
+
+			return sparseness;
+		}
+
+		virtual void EvaluateFitness(NEAT::Population& population) {
+			for(int i = 0; i < BeforePopulationEvaluationActions.size(); ++i) BeforePopulationEvaluationActions[i]->BeforePopulationEvaluation(*this);
+
+			populationImages.clear();
+
+			// create phenotype for each individual
+			for(int speciesIndex = 0; speciesIndex < population.m_Species.size(); ++speciesIndex) {
+				for(int individualIndex = 0; individualIndex < population.m_Species[speciesIndex].m_Individuals.size(); ++individualIndex) {
+					for(int i = 0; i < BeforeIndividualEvaluationActions.size(); ++i) BeforeIndividualEvaluationActions[i]->BeforeIndividualEvaluation(*this);
+
+					PhenotypeFunction->Create(population.m_Species[speciesIndex].m_Individuals[individualIndex]);
+					populationImages.push_back(PhenotypeFunction->Image.clone());
+
+					for(int i = 0; i < AfterIndividualEvaluationActions.size(); ++i) AfterIndividualEvaluationActions[i]->AfterIndividualEvaluation(*this);
+				}
+			}
+
+			// compute novelty metric / fitness for each individual
+			for(int speciesIndex = 0, index = 0; speciesIndex < population.m_Species.size(); ++speciesIndex) {
+				for(int individualIndex = 0; individualIndex < population.m_Species[speciesIndex].m_Individuals.size(); ++individualIndex) {
+					const double sparseness = ComputeSparseness(populationImages[index]);
+					population.m_Species[speciesIndex].m_Individuals[individualIndex].SetFitness(sparseness);
+					++index;
+				}
+			}
+
+			for(int i = 0; i < AfterPopulationEvaluationActions.size(); ++i) AfterPopulationEvaluationActions[i]->AfterPopulationEvaluation(*this);
+		}
+
+		virtual void EvaluatePopulation(NEAT::Population& population) {
+			EvaluateFitness(population);
+
+			// choose individuals to add to the archive
+			std::vector<int> individualsToAddToTheArchive;
+
+			for(int i = 0; i < NoveltySearch_AddToArchive; ++i) {
+				int index;
+				do {
+					index = population.m_RNG.RandInt(0, populationImages.size());
+				} while(std::find(individualsToAddToTheArchive.begin(), individualsToAddToTheArchive.end(), index) != individualsToAddToTheArchive.end());
+				individualsToAddToTheArchive.push_back(index);
+			}
+
+			// sort the list, smaller first
+			std::sort(individualsToAddToTheArchive.begin(), individualsToAddToTheArchive.end());
+
+			// add chosen individuals to the archive
+			for(int speciesIndex = 0, index = 0, addIndex = 0; speciesIndex < population.m_Species.size() && addIndex < individualsToAddToTheArchive.size(); ++speciesIndex) {
+				for(int individualIndex = 0; individualIndex < population.m_Species[speciesIndex].m_Individuals.size() && addIndex < individualsToAddToTheArchive.size(); ++individualIndex) {
+					if(index == individualsToAddToTheArchive[addIndex]) {
+						archiveImages.push_back(populationImages[index]);
+						archiveIndividuals.push_back(population.m_Species[speciesIndex].m_Individuals[individualIndex]);
+						++addIndex;
+					}
+					++index;
+				}
+			}
+		}
+	};
+
+	class MultiObjectiveNoveltySearchTemplate : public NoveltySearchTemplate {
+		double maxSparseness = 1;
+		double currentMaxSparseness = 1;
+	public:
+
+		virtual void EvaluateFitness(NEAT::Population& population) {
+			if(maxSparseness <= 1) {
+				ResetStagnation();
+			}
+
+			maxSparseness = currentMaxSparseness;
+
+			for(int i = 0; i < BeforePopulationEvaluationActions.size(); ++i) BeforePopulationEvaluationActions[i]->BeforePopulationEvaluation(*this);
+
+			populationImages.clear();
+
+			// create phenotype for each individual
+			for(int speciesIndex = 0; speciesIndex < population.m_Species.size(); ++speciesIndex) {
+				for(int individualIndex = 0; individualIndex < population.m_Species[speciesIndex].m_Individuals.size(); ++individualIndex) {
+					EvaluateIndividual(population.m_Species[speciesIndex].m_Individuals[individualIndex]);
+					populationImages.push_back(PhenotypeFunction->Image.clone());
+				}
+			}
+
+			// compute novelty metric / fitness for each individual
+			for(int speciesIndex = 0, index = 0; speciesIndex < population.m_Species.size(); ++speciesIndex) {
+				for(int individualIndex = 0; individualIndex < population.m_Species[speciesIndex].m_Individuals.size(); ++individualIndex) {
+					const double sparseness = ComputeSparseness(populationImages[index]);
+					population.m_Species[speciesIndex].m_Individuals[individualIndex].fitness.push_back(sparseness);
+					// 50% of scaled sparseness + 50% of scaled "original fitness"
+					population.m_Species[speciesIndex].m_Individuals[individualIndex].SetFitness(0.5 * sparseness / maxSparseness + 0.5 * population.m_Species[speciesIndex].m_Individuals[individualIndex].GetScaledFitness());
+					++index;
+					if(sparseness > currentMaxSparseness) currentMaxSparseness = sparseness;
+				}
+			}
+
+			for(int i = 0; i < AfterPopulationEvaluationActions.size(); ++i) AfterPopulationEvaluationActions[i]->AfterPopulationEvaluation(*this);
+		}
+	};
 }
 
 #endif	/* CORE_HPP */
