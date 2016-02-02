@@ -136,6 +136,10 @@ public:
     void ActivateUseInternalBias(); // like Activate() but uses m_bias as well
     void ActivateLeaky(double step); // activates in leaky integrator mode
 
+    void ActivateFeedForward();  // optimized for feed-forward networks
+    std::vector<std::vector<int>> neuronConnections;
+    std::vector<int> indexes;
+
     void RTRL_update_gradients();
     void RTRL_update_error(double a_target);
     void RTRL_update_weights();   // performs the backprop step

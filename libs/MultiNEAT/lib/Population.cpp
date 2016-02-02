@@ -483,7 +483,7 @@ void Population::Epoch()
                 if (fabs(t_Fitness - m_BestFitnessEver) >= m_Parameters.StagnationDelta)
                 {
                     m_GensSinceBestFitnessLastChanged = 0;
-                    std::cout<<"New best: "<< t_Fitness<<", pop: "<<m_Generation<<", scaled fitness: "<<m_Species[i].m_Individuals[j].GetScaledFitness()<<std::endl;
+                    // std::cout<<"New best: "<< t_Fitness<<", pop: "<<m_Generation<<", scaled fitness: "<<m_Species[i].m_Individuals[j].GetScaledFitness()<<std::endl;
                 }
 
                 m_BestFitnessEver = t_Fitness;

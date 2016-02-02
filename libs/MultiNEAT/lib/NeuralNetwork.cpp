@@ -403,6 +403,76 @@ void NeuralNetwork::Activate()
 
 }
 
+void NeuralNetwork::ActivateFeedForward()
+{
+    // neurons
+    for(int nIndex = 0; nIndex < indexes.size(); ++nIndex) {
+        const int neuronIndex = indexes[nIndex];
+
+        m_neurons[neuronIndex].m_activesum = 0;
+
+        // connections for the neuron
+        for(int nConnection = 0; nConnection < neuronConnections[neuronIndex].size(); ++nConnection) {
+            const int connectionIndex = neuronConnections[neuronIndex][nConnection];
+            m_neurons[neuronIndex].m_activesum += m_neurons[m_connections[connectionIndex].m_source_neuron_idx].m_activation * m_connections[connectionIndex].m_weight;
+        }
+        
+        // Apply the activation function
+        const double x = m_neurons[neuronIndex].m_activesum;
+        double y = 0.0;
+        const int i = neuronIndex;
+        switch (m_neurons[i].m_activation_function_type)
+        {
+        case SIGNED_SIGMOID:
+            y = af_sigmoid_signed(x, m_neurons[i].m_a, m_neurons[i].m_b);
+            break;
+        case UNSIGNED_SIGMOID:
+            y = af_sigmoid_unsigned(x, m_neurons[i].m_a, m_neurons[i].m_b);
+            break;
+        case TANH:
+            y = af_tanh(x, m_neurons[i].m_a, m_neurons[i].m_b);
+            break;
+        case TANH_CUBIC:
+            y = af_tanh_cubic(x, m_neurons[i].m_a, m_neurons[i].m_b);
+            break;
+        case SIGNED_STEP:
+            y = af_step_signed(x, m_neurons[i].m_b);
+            break;
+        case UNSIGNED_STEP:
+            y = af_step_unsigned(x, m_neurons[i].m_b);
+            break;
+        case SIGNED_GAUSS:
+            y = af_gauss_signed(x, m_neurons[i].m_a, m_neurons[i].m_b);
+            break;
+        case UNSIGNED_GAUSS:
+            y = af_gauss_unsigned(x, m_neurons[i].m_a, m_neurons[i].m_b);
+            break;
+        case ABS:
+            y = af_abs(x, m_neurons[i].m_b);
+            break;
+        case SIGNED_SINE:
+            y = af_sine_signed(x, m_neurons[i].m_a, m_neurons[i].m_b);
+            break;
+        case UNSIGNED_SINE:
+            y = af_sine_unsigned(x, m_neurons[i].m_a, m_neurons[i].m_b);
+            break;
+        case SIGNED_SQUARE:
+            y = af_square_signed(x, m_neurons[i].m_a, m_neurons[i].m_b);
+            break;
+        case UNSIGNED_SQUARE:
+            y = af_square_unsigned(x, m_neurons[i].m_a, m_neurons[i].m_b);
+            break;
+        case LINEAR:
+            y = af_linear(x, m_neurons[i].m_b);
+            break;
+        default:
+            y = af_sigmoid_unsigned(x, m_neurons[i].m_a, m_neurons[i].m_b);
+            break;
+        }
+        m_neurons[i].m_activation = y;
+    }
+}
+
 void NeuralNetwork::ActivateUseInternalBias()
 {
     // Loop connections. Calculate each connection's output signal.

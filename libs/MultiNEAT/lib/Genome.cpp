@@ -379,6 +379,8 @@ void Genome::BuildPhenotype(NeuralNetwork& a_Net) const
     a_Net.Clear();
     a_Net.SetInputOutputDimentions(m_NumInputs, m_NumOutputs);
 
+    a_Net.neuronConnections.clear();
+
     // Fill the net with the neurons
     for(unsigned int i=0; i<NumNeurons(); i++)
     {
@@ -394,6 +396,8 @@ void Genome::BuildPhenotype(NeuralNetwork& a_Net) const
 
         a_Net.AddNeuron( t_n );
     }
+
+    a_Net.neuronConnections.resize(NumNeurons());
 
     // Fill the net with the connections
     for(unsigned int i=0; i<NumLinks(); i++)
@@ -411,10 +415,22 @@ void Genome::BuildPhenotype(NeuralNetwork& a_Net) const
         t_c.m_hebb_pre_rate = 0.1;
         //////////////////////
 
+        a_Net.neuronConnections[t_c.m_target_neuron_idx].push_back(a_Net.m_connections.size());
+
         a_Net.AddConnection( t_c );
     }
 
     a_Net.Flush();
+
+    // neuron indexes
+    a_Net.indexes.clear();
+    a_Net.indexes.resize(NumNeurons() - m_NumInputs);
+    for(int i = 0; i < a_Net.indexes.size(); ++i) a_Net.indexes[i] = i + m_NumInputs;
+
+    // sort neurons by their depths
+    std::sort(a_Net.indexes.begin(), a_Net.indexes.end(), [&](const int lhs, const int rhs) -> bool {
+        return a_Net.m_neurons[lhs].m_split_y < a_Net.m_neurons[rhs].m_split_y; 
+    });
 
     // Note however that the RTRL variables are not initialized.
     // The user must manually call the InitRTRLMatrix() method to do it.
